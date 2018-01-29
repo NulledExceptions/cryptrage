@@ -5,7 +5,6 @@ sudo python configure.db.py
 sudo yum install -y wget
 
 LOCATION="https://download.postgresql.org/pub/repos/yum/10/redhat/rhel-7-x86_64/pgdg-centos10-10-2.noarch.rpm"
-DATA_FOLDER="/var/lib/pgsql/10/data"
 
 sudo yum install -y $LOCATION
 sudo yum install -y postgresql10-server
