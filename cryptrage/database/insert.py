@@ -10,7 +10,7 @@ from cryptrage.database.utils import manage_pool, get_table_name
 
 @manage_pool
 def insert_ticker(*, pool: AbstractConnectionPool=None, tick: NamedTuple, cursor: Cursor,
-                  table: str, schema: str=None):
+                  table: str, schema: str=None, **kwargs):
 
     table_name = sql.Identifier(get_table_name(schema=schema, table=table))
     fields = sql.SQL(', ').join(sql.Identifier(n) for n in tick._fields)
