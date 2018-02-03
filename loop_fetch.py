@@ -4,13 +4,11 @@ from typing import Callable
 from multiprocessing.dummy import Pool as ThreadPool
 import threading
 
-
 from cryptrage.external_api import get_kraken, get_gdax, get_bitstamp
 from cryptrage.database.insert import insert_ticker
 from cryptrage.logging import log_exception
 from psycopg2.pool import ThreadedConnectionPool, AbstractConnectionPool
-
-
+from pid.decorator import pidfile
 
 
 def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
@@ -29,7 +27,7 @@ def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
             t.join()  # in case the db is very slow, we wait for it
 
 
-
+@pidfile(pidname='cryptrage', piddir=".")
 def main():
     PGPASSWORD = os.environ.get("PGPASSWORD")
 
@@ -40,3 +38,7 @@ def main():
     thread_pool = ThreadPool(3)
     thread_pool.map(lambda get_function: insert(get_function=get_function, pool=db_pool, sleep_for=20),
                     [get_kraken, get_gdax, get_bitstamp])
+
+
+if __name__ == "__main__":
+    main()
