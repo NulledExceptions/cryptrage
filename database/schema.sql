@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS ticker
 (
   ts                TIMESTAMPTZ NOT NULL,
-  exchange          CHAR(10)    NOT NULL,
+  exchange          VARCHAR(10)    NOT NULL,
   base              CHAR(3)     NOT NULL,
   quote             CHAR(3)     NOT NULL,
   last_trade_price  DECIMAL(10, 2),

@@ -20,14 +20,16 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
     SELECT 
       LAST(ask_price, ts) ask, 
       LAST(bid_price, ts) bid, 
-      LAST(ts, ts) ts, 
-      TRIM(exchange) exchange 
-    FROM {0} GROUP BY TRIM(exchange)
+      LAST(ts, ts) ts,
+      exchange
+    FROM {0} 
+    GROUP BY exchange
     )
     SELECT
       (q1.bid - q2.ask) AS spread,
       q1.exchange sell_to_exchange,
       q2.exchange buy_from_exchange,
+      MD5(CONCAT(q1.exchange, q2.exchange)) exchanges_hash,
       q1.ts sell_to_ts,
       q2.ts buy_from_ts
     FROM sq q1
