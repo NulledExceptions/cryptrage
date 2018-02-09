@@ -1,0 +1,14 @@
+[Unit]
+Description=Insert into timescale database
+
+[Service]
+Type=Simple
+WorkingDirectory=/home/timescale/timescale
+EnvironmentFile=/home/timescale/.env
+PIDFile=/home/timescale/timescale/cryptage.pid
+ExecStart=/home/timescale/.conda/envs/timescale/bin/python /home/timescale/timescale/loop_fetch.py
+User=timescale
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
