@@ -29,7 +29,7 @@ def send_email(*, older_than: Dict[str, NamedTuple], emailed_spreads: Dict[str, 
     if older_than:
         now = localize_timestamp(time())
         to_send = {}
-        for key, value in older_than:
+        for key, value in older_than.items():
             if (key not in emailed_spreads) or (now - getattr(value, time_attr) > td):  # email already sent
                 to_send[key] = value
         emailed_spreads = {**emailed_spreads, **to_send}
@@ -59,9 +59,10 @@ def send(*, spreads: Dict[str, NamedTuple], server: str, user: str, password: st
     server.sendmail(user, to, text)
 
 
-def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, sleep_for: int=20, **kwargs) -> None:
+def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, sleep_for: int=20,
+                 open_for: int=10, dont_email_newer_than: int=2, **kwargs) -> None:
     """
-    Send an email if a spread if open for more than 10 minutes
+    Send an email if a spread if open for more than open_for seconds
     """
     spreads_to_email = {}
     emailed_spreads = {}
@@ -70,12 +71,13 @@ def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, s
         if spreads:
             current_spreads = {getattr(spread, 'exchanges_hash'): spread for spread in spreads}
             spreads_to_email = {**current_spreads, **spreads_to_email}
-            older_than = get_older_than(td=timedelta(minutes=10), spreads=spreads_to_email,
+            older_than = get_older_than(td=timedelta(seconds=open_for), spreads=spreads_to_email,
                                         time_attr='sell_to_ts')
             spreads_to_email, emailed_spreads = send_email(older_than=older_than,
                                                            emailed_spreads=emailed_spreads,
                                                            time_attr='sell_to_ts',
-                                                           td=timedelta(hours=2), **kwargs)
+                                                           td=timedelta(hours=dont_email_newer_than),
+                                                           **kwargs)
         sleep(sleep_for)
 
 
@@ -93,7 +95,8 @@ def main() -> None:
                     "to": "giovanni@lanzani.nl"}
     dsn = f"host=localhost password={pgpassword} dbname=timescale user=timescale"
     pool = ThreadedConnectionPool(minconn=1, maxconn=2, dsn=dsn)
-    check_spread(pool=pool, transaction_pct=0.25, sleep_for=20, **email_kwargs)
+    check_spread(pool=pool, transaction_pct=0.25, sleep_for=5, open_for=10,
+                 dont_email_newer_than=2, **email_kwargs)
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ def main() -> None:
     dsn = f"host=localhost password={PGPASSWORD} dbname=timescale user=timescale"
     db_pool = ThreadedConnectionPool(minconn=1, maxconn=5, dsn=dsn)
     thread_pool = ThreadPool(3)
-    thread_pool.map(lambda get_function: insert(get_function=get_function, pool=db_pool, sleep_for=20),
+    thread_pool.map(lambda get_function: insert(get_function=get_function, pool=db_pool, sleep_for=5),
                     [get_kraken, get_gdax, get_bitstamp])
 
 
