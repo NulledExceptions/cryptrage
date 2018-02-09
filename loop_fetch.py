@@ -1,4 +1,5 @@
 import os
+from os import path
 from time import sleep
 from typing import Callable
 from multiprocessing.dummy import Pool as ThreadPool
@@ -9,8 +10,7 @@ from pid.decorator import pidfile
 
 from cryptrage.external_api import get_kraken, get_gdax, get_bitstamp
 from cryptrage.database.insert import insert_ticker
-from cryptrage.logging import log_exception
-
+from cryptrage.logging import log_exception, setup_logging
 
 
 def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
@@ -21,10 +21,10 @@ def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
             tick = get_function(**kwargs)
             if tick:
                 t = threading.Thread(target=insert_ticker,
-                                     kwargs={"pool": pool, "tick": tick, "table": "ticker"})
+                                     kwargs={"pool": pool, "tick": tick, "table": "ticker", **kwargs})
                 t.start()
         except Exception as e:
-            log_exception(exception=e)  # TODO: think what should we do here
+            log_exception(f"Called insert with {kwargs}", **kwargs)
         sleep(sleep_for)
         if t:
             t.join()  # in case the db is very slow, we wait for it
@@ -32,6 +32,8 @@ def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
 
 @pidfile(pidname='cryptrage', piddir=".")
 def main() -> None:
+    config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'insert_db.yaml')
+    logger = setup_logging(config_path=config_path, name='insert')
     PGPASSWORD = os.environ.get("PGPASSWORD")
 
     if not PGPASSWORD:
@@ -39,7 +41,10 @@ def main() -> None:
     dsn = f"host=localhost password={PGPASSWORD} dbname=timescale user=timescale"
     db_pool = ThreadedConnectionPool(minconn=1, maxconn=5, dsn=dsn)
     thread_pool = ThreadPool(3)
-    thread_pool.map(lambda get_function: insert(get_function=get_function, pool=db_pool, sleep_for=5),
+    thread_pool.map(lambda get_function: insert(get_function=get_function,
+                                                pool=db_pool,
+                                                sleep_for=1,
+                                                logger=logger),
                     [get_kraken, get_gdax, get_bitstamp])
 
 

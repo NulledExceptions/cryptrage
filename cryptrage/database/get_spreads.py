@@ -24,7 +24,8 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
       exchange
     FROM {0} 
     GROUP BY exchange
-    )
+    ),
+    spreads AS (
     SELECT
       (q1.bid - q2.ask) AS spread,
       ROUND((q1.bid - q2.ask) / q2.ask * 100, 2) AS ask_pct,
@@ -33,11 +34,15 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
       q2.exchange buy_from_exchange,
       MD5(CONCAT(q1.exchange, q2.exchange)) exchanges_hash,
       q1.ts sell_to_ts,
-      q2.ts buy_from_ts
+      q2.ts buy_from_ts,
+      EXTRACT(HOUR FROM now()) current_hour
     FROM sq q1
     CROSS JOIN sq q2
     WHERE 
-      q1.bid - q2.ask > (q1.bid * {1} + q2.ask * {1});
+      q1.bid - q2.ask > (q1.bid * {1} + q2.ask * {1}))
+    SELECT * FROM spreads
+    WHERE (ask_pct > 1 AND current_hour BETWEEN 7 AND 23)
+        OR ask_pct > 2;
     """).format(table_name, transaction_ratio)
     cursor.execute(statement)
     results = cursor.fetchall()

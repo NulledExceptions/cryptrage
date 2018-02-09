@@ -6,7 +6,7 @@ setup(
     description="Download ticks from various cryptexchanges and alert on arbitrage",
     author="Giovanni Lanzani",
     install_requires=['pytz', 'tzlocal', 'krakenex', 'gdax', 'BitstampClient',
-                      'psycopg2', 'pid'],
+                      'psycopg2', 'pid', 'PyYAML'],
     extras_require={
         'dev': ['pytest'],
         'test': ['pytest'],
