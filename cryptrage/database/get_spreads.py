@@ -27,6 +27,8 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
     )
     SELECT
       (q1.bid - q2.ask) AS spread,
+      ROUND((q1.bid - q2.ask) / q2.ask * 100, 2) AS ask_pct,
+      q2.ask,
       q1.exchange sell_to_exchange,
       q2.exchange buy_from_exchange,
       MD5(CONCAT(q1.exchange, q2.exchange)) exchanges_hash,
