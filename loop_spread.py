@@ -39,7 +39,8 @@ def send_email(*, older_than: Dict[str, NamedTuple], emailed_spreads: Dict[str, 
         if (key not in emailed_spreads) or (now - getattr(value, time_attr) > td):  # email already sent
             to_send[key] = value
     logger.info(f"Spreads to email are {to_send}")
-    send(spreads=to_send, **kwargs)
+    if to_send:
+        send(spreads=to_send, **kwargs)
     emailed_spreads = {**emailed_spreads, **to_send}
     logger.info(f"Emailed spreads in the last {td} are {emailed_spreads}")
 
