@@ -41,8 +41,8 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
     WHERE 
       q1.bid - q2.ask > (q1.bid * {1} + q2.ask * {1}))
     SELECT * FROM spreads
-    WHERE (ask_pct > 1 AND current_hour BETWEEN 7 AND 23)
-        OR ask_pct > 2;
+    WHERE (ask_pct > 1.5 AND current_hour BETWEEN 7 AND 23)
+        OR ask_pct > 2.5;
     """).format(table_name, transaction_ratio)
     cursor.execute(statement)
     results = cursor.fetchall()
