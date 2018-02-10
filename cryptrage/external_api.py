@@ -4,6 +4,7 @@ import datetime
 from typing import Union, Optional
 from collections import namedtuple
 from functools import wraps
+import logging
 
 import pytz
 from tzlocal import get_localzone
@@ -12,7 +13,6 @@ import gdax
 import bitstamp.client as bclient
 from requests.exceptions import RequestException
 
-from cryptrage.logging import log_api_error, log_missing_response, log_exception
 
 utcnow = datetime.datetime.utcnow
 
@@ -21,6 +21,8 @@ TS = Union[str, int]
 KRAKEN_MAPPING = {'XBTEUR': 'XXBTZEUR'}
 GDAP_MAPPING = {'BTC': 'XBT'}
 BITSTAMP_MAPPING = {'BTC': 'XBT'}
+
+logger = logging.getLogger(__name__)
 
 Kraken = namedtuple('Kraken', 'ts exchange base quote last_trade_price last_trade_volume '
                               'ask_price ask_wlv ask_volume bid_price bid_wlv bid_volume '
@@ -64,7 +66,7 @@ def log_request_exception(f):
             result = f(*args, **kwargs)
             return result
         except RequestException as e:
-            log_exception(e)
+            logger.exception(f"Function {f} raised an exception")
             return
     return inner
 
@@ -78,7 +80,7 @@ def get_kraken(pair: str='XBTEUR') -> Optional[Kraken]:
 
     after = time.time()
     if response.get('error'):
-        log_api_error(response.get('error'))
+        logger.error(f"Krakanex got an error: {response.get('error')}")
         return
 
     # the API doesn't return the ts, so use a workaround
@@ -107,7 +109,7 @@ def get_kraken(pair: str='XBTEUR') -> Optional[Kraken]:
                       high_24h=Decimal(res.get('h')[1]),
                       opening=Decimal(res.get('o')))
     else:
-        log_missing_response(response=response)
+        logger.warning(f"Krakenex got no valid response: {response}")
 
 
 @log_request_exception
@@ -116,7 +118,7 @@ def get_gdax(pair: str='BTC-EUR') -> Optional[GDAX]:
     response = client.get_product_ticker(product_id=pair)
 
     if response.get('message') or not response.get('trade_id'):
-        log_missing_response(response=response)
+        logger.warning(f"GDAX got no valid response: {response}")
         return
 
     return GDAX(ts=localize_gdax(response.get('time')),
@@ -135,7 +137,7 @@ def get_bitstamp(base='BTC', quote='EUR') -> Optional[Bitstamp]:
     response = client.ticker(base=base, quote=quote)
 
     if not response.get('timestamp'):
-        log_missing_response(response=response)
+        logger.warning(f"Bitstamp got no valid response: {response}")
         return
 
     return Bitstamp(ts=localize_timestamp(response.get('timestamp')),

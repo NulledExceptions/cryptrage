@@ -10,7 +10,10 @@ from pid.decorator import pidfile
 
 from cryptrage.external_api import get_kraken, get_gdax, get_bitstamp
 from cryptrage.database.insert import insert_ticker
-from cryptrage.logging import log_exception, setup_logging
+from cryptrage.logging import setup_logging
+
+config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'insert_db.yaml')
+logger = setup_logging(config_path=config_path, name='insert')
 
 
 def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
@@ -24,7 +27,7 @@ def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
                                      kwargs={"pool": pool, "tick": tick, "table": "ticker", **kwargs})
                 t.start()
         except Exception as e:
-            log_exception(f"Called insert with {kwargs}", **kwargs)
+            logger.exception(f"Called insert with {kwargs}", **kwargs)
         sleep(sleep_for)
         if t:
             t.join()  # in case the db is very slow, we wait for it
@@ -32,8 +35,7 @@ def insert(get_function: Callable=None, pool: AbstractConnectionPool=None,
 
 @pidfile(pidname='cryptrage', piddir=".")
 def main() -> None:
-    config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'insert_db.yaml')
-    logger = setup_logging(config_path=config_path, name='insert')
+
     PGPASSWORD = os.environ.get("PGPASSWORD")
 
     if not PGPASSWORD:
@@ -43,8 +45,7 @@ def main() -> None:
     thread_pool = ThreadPool(3)
     thread_pool.map(lambda get_function: insert(get_function=get_function,
                                                 pool=db_pool,
-                                                sleep_for=1,
-                                                logger=logger),
+                                                sleep_for=1),
                     [get_kraken, get_gdax, get_bitstamp])
 
 

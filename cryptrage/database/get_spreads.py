@@ -35,7 +35,7 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
       MD5(CONCAT(q1.exchange, q2.exchange)) exchanges_hash,
       q1.ts sell_to_ts,
       q2.ts buy_from_ts,
-      EXTRACT(HOUR FROM now()) current_hour
+      EXTRACT(HOUR FROM now() AT TIME ZONE 'Europe/Amsterdam') current_hour
     FROM sq q1
     CROSS JOIN sq q2
     WHERE 

@@ -5,53 +5,53 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import timedelta, datetime
-from typing import Dict, NamedTuple, Tuple
-import logging
+from typing import Dict, NamedTuple
 
 from psycopg2.pool import ThreadedConnectionPool, AbstractConnectionPool
 from pid.decorator import pidfile
 
 from cryptrage.database.get_spreads import get_spreads
 from cryptrage.external_api import localize_timestamp
+from cryptrage.logging import setup_logging
 
-from cryptrage.logging import setup_logging, add_logger
+config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'send_email.yaml')
+logger = setup_logging(config_path=config_path, name='send')
 
 
-def get_older_than(*, td: timedelta=timedelta(minutes=10), spreads: Dict[str, NamedTuple],
-                   time_attr: str) -> Dict[str, NamedTuple]:
+def get_between_deltas(*, td_min: timedelta=timedelta(seconds=10),
+                       td_max: timedelta=timedelta(seconds=20),
+                       spreads: Dict[str, NamedTuple],
+                       time_attr: str) -> Dict[str, NamedTuple]:
     now = localize_timestamp(time())
     results = {}
     for key, value in spreads.items():
-        if now - getattr(value, time_attr) > td:
+        if ((now - getattr(value, time_attr) > td_min) and
+            (now - getattr(value, time_attr) < td_max)):
             results[key] = value
     return results
 
 
-@add_logger
 def send_email(*, older_than: Dict[str, NamedTuple], emailed_spreads: Dict[str, NamedTuple],
-               td: timedelta=timedelta(hours=2), time_attr: str,
-               logger=None, **kwargs) -> Tuple[Dict[str, NamedTuple], Dict[str, NamedTuple]]:
-    if older_than:
-        now = localize_timestamp(time())
-        to_send = {}
-        for key, value in older_than.items():
-            if (key not in emailed_spreads) or (now - getattr(value, time_attr) > td):  # email already sent
-                to_send[key] = value
-        logger.info(f"Spreads to email are {to_send}")
-        send(spreads=to_send, logger=logger, **kwargs)
-        emailed_spreads = {**emailed_spreads, **to_send}
-        logger.info(f"Emailed spreads in the last {td} are {emailed_spreads}")
+               td: timedelta=timedelta(hours=2), time_attr: str, **kwargs) -> Dict[str, NamedTuple]:
+    now = localize_timestamp(time())
+    to_send = {}
+    for key, value in older_than.items():
+        if (key not in emailed_spreads) or (now - getattr(value, time_attr) > td):  # email already sent
+            to_send[key] = value
+    logger.info(f"Spreads to email are {to_send}")
+    send(spreads=to_send, **kwargs)
+    emailed_spreads = {**emailed_spreads, **to_send}
+    logger.info(f"Emailed spreads in the last {td} are {emailed_spreads}")
 
-    return {}, emailed_spreads
+    return emailed_spreads
 
 
 def pprint(*, record: NamedTuple) -> str:
     return "\n" + "\n".join([f"{key}: {value}" for key, value in record._asdict().items()])
 
 
-@add_logger
 def send(*, spreads: Dict[str, NamedTuple], server_addr: str, user: str, password: str,
-         port: int, to: str, logger=None):
+         port: int, to: str):
     logger.info(f"Received {len(spreads)} spreads to email")
     now = datetime.now()
     server = smtplib.SMTP(server_addr, port)
@@ -72,9 +72,8 @@ def send(*, spreads: Dict[str, NamedTuple], server_addr: str, user: str, passwor
     server.sendmail(user, to, text)
 
 
-@add_logger
 def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, sleep_for: int=5,
-                 open_for: int=10, dont_email_newer_than: int=2, logger=None, **kwargs) -> None:
+                 open_for: int=10, dont_email_newer_than: int=2, **kwargs) -> None:
     """
     Send an email if a spread if open for more than open_for seconds
     """
@@ -87,23 +86,25 @@ def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, s
             logger.info(f"Got spreads, namely {current_spreads}")
             # the order ensures the **older** timestamp in spreads_to_email will overwrite the newer!!
             spreads_to_email = {**current_spreads, **spreads_to_email}
-            older_than = get_older_than(td=timedelta(seconds=open_for), spreads=spreads_to_email,
-                                        time_attr='sell_to_ts')
+            older_than = get_between_deltas(td_min=timedelta(seconds=open_for),
+                                            td_max=timedelta(seconds=open_for * 2),
+                                            spreads=spreads_to_email,
+                                            time_attr='sell_to_ts')
             if older_than:
                 logger.info(f"Spreads open for more than {open_for} are {older_than}")
 
-                spreads_to_email, emailed_spreads = send_email(older_than=older_than,
-                                                               emailed_spreads=emailed_spreads,
-                                                               time_attr='sell_to_ts',
-                                                               td=timedelta(hours=dont_email_newer_than),
-                                                               **kwargs)
+                emailed_spreads = send_email(older_than=older_than,
+                                             emailed_spreads=emailed_spreads,
+                                             time_attr='sell_to_ts',
+                                             td=timedelta(hours=dont_email_newer_than),
+                                             **kwargs)
+                spreads_to_email = {}
         sleep(sleep_for)
 
 
 @pidfile(pidname='emailer', piddir='.')
 def main() -> None:
-    config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'send_email.yaml')
-    logger = setup_logging(config_path=config_path, name='send')
+
     pgpassword = os.environ.get("PGPASSWORD")
 
     if not pgpassword:
@@ -121,7 +122,7 @@ def main() -> None:
     pool = ThreadedConnectionPool(minconn=1, maxconn=2, dsn=dsn)
     logger.info("Starting spread checker")
     check_spread(pool=pool, transaction_pct=0.25, sleep_for=5, open_for=10,
-                 dont_email_newer_than=2, **email_kwargs, logger=logger)
+                 dont_email_newer_than=2, **email_kwargs)
 
 
 if __name__ == "__main__":
