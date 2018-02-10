@@ -32,17 +32,17 @@ def get_between_deltas(*, td_min: timedelta=timedelta(seconds=10),
 
 
 def send_email(*, older_than: Dict[str, NamedTuple], emailed_spreads: Dict[str, NamedTuple],
-               td: timedelta=timedelta(hours=2), time_attr: str, **kwargs) -> Dict[str, NamedTuple]:
+               **kwargs) -> Dict[str, NamedTuple]:
     now = localize_timestamp(time())
     to_send = {}
     for key, value in older_than.items():
-        if (key not in emailed_spreads) or (now - getattr(value, time_attr) > td):  # email already sent
+        if (key not in emailed_spreads):
             to_send[key] = value
     logger.info(f"Spreads to email are {to_send}")
     if to_send:
         send(spreads=to_send, **kwargs)
     emailed_spreads = {**emailed_spreads, **to_send}
-    logger.info(f"Emailed spreads in the last {td} are {emailed_spreads}")
+    logger.info(f"Emailed spreads are {emailed_spreads}")
 
     return emailed_spreads
 
@@ -93,11 +93,12 @@ def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, s
                                             time_attr='sell_to_ts')
             if older_than:
                 logger.info(f"Spreads open for more than {open_for} are {older_than}")
-
+                emailed_spreads = get_between_deltas(td_min=timedelta(seconds=open_for),
+                                                     td_max=timedelta(hours=dont_email_newer_than),
+                                                     spreads=spreads_to_email,
+                                                     time_attr='sell_to_ts')
                 emailed_spreads = send_email(older_than=older_than,
                                              emailed_spreads=emailed_spreads,
-                                             time_attr='sell_to_ts',
-                                             td=timedelta(hours=dont_email_newer_than),
                                              **kwargs)
                 spreads_to_email = {}
         sleep(sleep_for)
