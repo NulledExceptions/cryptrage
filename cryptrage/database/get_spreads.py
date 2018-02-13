@@ -13,6 +13,7 @@ from cryptrage.database.utils import manage_pool_key, get_table_name
 def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
                 table: str, schema: str=None,
                 transaction_pct: float=0.25, **kwargs) -> List[NamedTuple]:
+    # TODO the time interval of 10 minutes could become a variable
     table_name = sql.Identifier(get_table_name(schema=schema, table=table))
     transaction_ratio = sql.SQL(f"{transaction_pct / 100.}")
     statement = sql.SQL("""
@@ -23,6 +24,7 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
       LAST(ts, ts) ts,
       exchange
     FROM {0} 
+    WHERE ts > now() - INTERVAL '10 minutes'
     GROUP BY exchange
     ),
     spreads AS (
@@ -42,7 +44,7 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
       q1.bid - q2.ask > (q1.bid * {1} + q2.ask * {1}))
     SELECT * FROM spreads
     WHERE ((ask_pct > 1 AND current_hour BETWEEN 7 AND 23) OR ask_pct > 2)
-      AND (GREATEST(buy_from_ts, sell_to_ts) - LEAST(buy_from_ts, sell_to_ts) < INTERVAL '10 seconds');
+      AND (buy_from_ts - sell_to_ts BETWEEN INTERVAL '-5 seconds' AND INTERVAL '5 seconds');
     """).format(table_name, transaction_ratio)
     cursor.execute(statement)
     results = cursor.fetchall()
