@@ -5,7 +5,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import timedelta, datetime
-from typing import Dict, NamedTuple
+from typing import Dict, NamedTuple, Tuple, List
 
 from psycopg2.pool import ThreadedConnectionPool, AbstractConnectionPool
 from pid.decorator import pidfile
@@ -29,22 +29,6 @@ def get_between_deltas(*, td_min: timedelta=timedelta(seconds=10),
             (now - getattr(value, time_attr) < td_max)):
             results[key] = value
     return results
-
-
-def send_email(*, older_than: Dict[str, NamedTuple], emailed_spreads: Dict[str, NamedTuple],
-               **kwargs) -> Dict[str, NamedTuple]:
-    now = localize_timestamp(time())
-    to_send = {}
-    for key, value in older_than.items():
-        if (key not in emailed_spreads):
-            to_send[key] = value
-    logger.info(f"Spreads to email are {to_send}")
-    if to_send:
-        send(spreads=to_send, **kwargs)
-        logger.info(f"Emailed spreads are {to_send}")
-    emailed_spreads = {**emailed_spreads, **to_send}
-
-    return emailed_spreads
 
 
 def pprint(*, record: NamedTuple) -> str:
@@ -73,39 +57,56 @@ def send(*, spreads: Dict[str, NamedTuple], server_addr: str, user: str, passwor
     server.sendmail(user, to, text)
 
 
-def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, sleep_for: int=5,
-                 open_for: int=10, dont_email_newer_than: int=2, **kwargs) -> None:
+def _check_spreads(*, spreads: List[NamedTuple], spreads_to_email: Dict[str, NamedTuple],
+                   emailed_spreads: Dict[str, NamedTuple],
+                   open_for: timedelta=timedelta(seconds=10),
+                   dont_email_newer_than: timedelta=timedelta(hours=2),
+                   **kwargs) -> Tuple[Dict[str, NamedTuple], Dict[str, NamedTuple]]:
+    current_spreads = {getattr(spread, 'exchanges_hash'): spread for spread in spreads}
+    logger.info(f"Got spreads, namely {current_spreads}")
+    # the order ensures the **older** timestamp in spreads_to_email will overwrite the newer!!
+    spreads_to_email = {**current_spreads, **spreads_to_email}
+    older_than = get_between_deltas(td_min=open_for,
+                                    td_max=dont_email_newer_than,
+                                    spreads=spreads_to_email,
+                                    time_attr='sell_to_ts')
+    emailed_spreads = get_between_deltas(td_min=timedelta(0),
+                                         td_max=dont_email_newer_than,
+                                         spreads=emailed_spreads,
+                                         time_attr='sell_to_ts')
+    # TODO first check that this does what it should, then move it
+    logger.info(f"Spreads open for more than {open_for.total_seconds()} seconds "
+                f"are {older_than}")
+    logger.info(f"Spreads emailed less than {dont_email_newer_than.total_seconds()} "
+                f"seconds ago are {emailed_spreads}")
+    # spreads that were emailed less than `dont_email_newer_than`, should not be emailed again
+    ready_to_send = {el: older_than[el] for el in older_than if el not in emailed_spreads}
+    if ready_to_send:
+        logger.info(f"Spreads to email are {ready_to_send}")
+        send(spreads=ready_to_send, **kwargs)
+        emailed_spreads = {**emailed_spreads, **ready_to_send}
+        spreads_to_email = {}
+    return spreads_to_email, emailed_spreads
+
+
+def check_spreads(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, sleep_for: int=5,
+                  open_for: timedelta=timedelta(seconds=10),
+                  dont_email_newer_than: timedelta=timedelta(hours=2), **kwargs) -> None:
     """
     Send an email if a spread if open for more than open_for seconds
     """
-    # TODO the various time components need to be streamlined here
-    # TODO and a good check on everything needs to take place
+    # TODO Good check on everything needs to take place
     spreads_to_email = {}
     emailed_spreads = {}
     while True:
         spreads = get_spreads(pool=pool, table='ticker', transaction_pct=transaction_pct)
         if spreads:
-            current_spreads = {getattr(spread, 'exchanges_hash'): spread for spread in spreads}
-            logger.info(f"Got spreads, namely {current_spreads}")
-            # the order ensures the **older** timestamp in spreads_to_email will overwrite the newer!!
-            spreads_to_email = {**current_spreads, **spreads_to_email}
-            older_than = get_between_deltas(td_min=timedelta(seconds=open_for),
-                                            td_max=timedelta(hours=dont_email_newer_than),
-                                            spreads=spreads_to_email,
-                                            time_attr='sell_to_ts')
-            if older_than:
-                logger.info(f"Spreads open for more than {open_for} are {older_than}")
-                emailed_spreads = get_between_deltas(td_min=timedelta(seconds=open_for),
-                                                     td_max=timedelta(hours=dont_email_newer_than),
-                                                     spreads=emailed_spreads,
-                                                     time_attr='sell_to_ts')
-                logger.info(f"Emailed spreads between {open_for} seconds and"
-                            f" {dont_email_newer_than} hours are {emailed_spreads}")
-
-                emailed_spreads = send_email(older_than=older_than,
-                                             emailed_spreads=emailed_spreads,
-                                             **kwargs)
-                spreads_to_email = {}
+            spreads_to_email, emailed_spreads = _check_spreads(spreads=spreads,
+                                                               spreads_to_email=spreads_to_email,
+                                                               emailed_spreads=emailed_spreads,
+                                                               open_for=open_for,
+                                                               dont_email_newer_than=dont_email_newer_than,
+                                                               **kwargs)
         sleep(sleep_for)
 
 
@@ -128,8 +129,8 @@ def main() -> None:
     logger.info("Initializing connection pool")
     pool = ThreadedConnectionPool(minconn=1, maxconn=2, dsn=dsn)
     logger.info("Starting spread checker")
-    check_spread(pool=pool, transaction_pct=0.25, sleep_for=5, open_for=10,
-                 dont_email_newer_than=2, **email_kwargs)
+    check_spreads(pool=pool, transaction_pct=0.25, sleep_for=5, open_for=timedelta(seconds=10),
+                  dont_email_newer_than=timedelta(hours=2), **email_kwargs)
 
 
 if __name__ == "__main__":
