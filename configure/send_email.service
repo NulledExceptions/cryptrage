@@ -2,13 +2,14 @@
 Description=Send emails on arbitrage opportunities
 
 [Service]
-Type=Simple
+Type=simple
 WorkingDirectory=/home/timescale/timescale
 EnvironmentFile=/home/timescale/.env
 PIDFile=/home/timescale/timescale/emailer.pid
 ExecStart=/home/timescale/.conda/envs/timescale/bin/python /home/timescale/timescale/loop_spread.py
 User=timescale
-Restart=on-abort
+Restart=on-failure
+RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
