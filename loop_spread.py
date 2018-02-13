@@ -41,8 +41,8 @@ def send_email(*, older_than: Dict[str, NamedTuple], emailed_spreads: Dict[str, 
     logger.info(f"Spreads to email are {to_send}")
     if to_send:
         send(spreads=to_send, **kwargs)
+        logger.info(f"Emailed spreads are {to_send}")
     emailed_spreads = {**emailed_spreads, **to_send}
-    logger.info(f"Emailed spreads are {emailed_spreads}")
 
     return emailed_spreads
 
@@ -64,7 +64,7 @@ def send(*, spreads: Dict[str, NamedTuple], server_addr: str, user: str, passwor
     logger.info(f"Login in {server_addr} successful")
     msg = MIMEMultipart()
     msg['From'] = user
-    msg['To'] = to
+    msg['To'] = ", ".join(to)  # in case of multiple recipients
     msg['Subject'] = f"Cryptrage report {now}"
     body = "\n".join([pprint(record=spread) for spread in spreads.values()])
     logger.info(f"Message body is {body}")
@@ -78,6 +78,8 @@ def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, s
     """
     Send an email if a spread if open for more than open_for seconds
     """
+    # TODO the various time components need to be streamlined here
+    # TODO and a good check on everything needs to take place
     spreads_to_email = {}
     emailed_spreads = {}
     while True:
@@ -88,15 +90,18 @@ def check_spread(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, s
             # the order ensures the **older** timestamp in spreads_to_email will overwrite the newer!!
             spreads_to_email = {**current_spreads, **spreads_to_email}
             older_than = get_between_deltas(td_min=timedelta(seconds=open_for),
-                                            td_max=timedelta(seconds=open_for * 2),
+                                            td_max=timedelta(hours=dont_email_newer_than),
                                             spreads=spreads_to_email,
                                             time_attr='sell_to_ts')
             if older_than:
                 logger.info(f"Spreads open for more than {open_for} are {older_than}")
                 emailed_spreads = get_between_deltas(td_min=timedelta(seconds=open_for),
                                                      td_max=timedelta(hours=dont_email_newer_than),
-                                                     spreads=spreads_to_email,
+                                                     spreads=emailed_spreads,
                                                      time_attr='sell_to_ts')
+                logger.info(f"Emailed spreads between {open_for} seconds and"
+                            f" {dont_email_newer_than} hours are {emailed_spreads}")
+
                 emailed_spreads = send_email(older_than=older_than,
                                              emailed_spreads=emailed_spreads,
                                              **kwargs)
@@ -118,7 +123,7 @@ def main() -> None:
                     "user": 'pycryptrage@gmail.com',
                     "password": email_pw,
                     "port": 587,
-                    "to": "giovanni@lanzani.nl"}
+                    "to": ["giovanni@lanzani.nl", "rogier.de.jonge@gmail.com"]}
     dsn = f"host=localhost password={pgpassword} dbname=timescale user=timescale"
     logger.info("Initializing connection pool")
     pool = ThreadedConnectionPool(minconn=1, maxconn=2, dsn=dsn)
