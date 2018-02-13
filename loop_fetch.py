@@ -8,7 +8,7 @@ import threading
 from psycopg2.pool import ThreadedConnectionPool, AbstractConnectionPool
 from pid.decorator import pidfile
 
-from cryptrage.external_api import get_kraken, get_gdax, get_bitstamp
+from cryptrage.external_api import get_kraken, get_bitstamp
 from cryptrage.database.insert import insert_ticker
 from cryptrage.logging import setup_logging
 
@@ -46,7 +46,7 @@ def main() -> None:
     thread_pool.map(lambda get_function: insert(get_function=get_function,
                                                 pool=db_pool,
                                                 sleep_for=1),
-                    [get_kraken, get_gdax, get_bitstamp])
+                    [get_kraken, get_bitstamp])
 
 
 if __name__ == "__main__":

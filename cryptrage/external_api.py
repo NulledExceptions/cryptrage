@@ -9,10 +9,11 @@ import krakenex
 import gdax
 import bitstamp.client as bclient
 from requests.exceptions import RequestException
+import websockets
 
 from cryptrage.exchanges import (create_kraken_tuple, Bitstamp, create_gdax_response,
                                  GDAX, Kraken, KRAKEN_MAPPING, localize_timestamp,
-                                 create_bitstamp_response)
+                                 create_bitstamp_response, create_gdax_ws_response)
 
 
 logger = logging.getLogger(__name__)
@@ -75,3 +76,40 @@ def get_bitstamp(base='BTC', quote='EUR') -> Optional[Bitstamp]:
 
     return create_bitstamp_response(response=response, base=base, quote=quote)
 
+
+@log_request_exception
+async def get_gdax_async(*, insert_function, insert_kwargs):
+    """
+
+    :param insert_function: A function whose first positional parameter is the NamedTuple to insert
+    :param insert_kwargs: Kwargs for `insert_function`
+    :return:
+    """
+    subscribe = json.dumps({
+        "type": "subscribe",
+        "product_ids": [
+            "BTC-EUR"
+        ],
+        "channels": [
+            {
+                "name": "ticker",
+                "product_ids": [
+                    "BTC-EUR"
+                ]
+            }
+        ]
+    })
+    gdax_ws_address = "wss://ws-feed.gdax.com"
+    async with websockets.connect(gdax_ws_address) as websocket:
+        await websocket.send(subscribe)
+        logger.info(f"Connected to websocket {gdax_ws_address}")
+        while True:
+            message_str = await websocket.recv()
+            logger.info(f"Received message {message_str}")
+            message = json.loads(message_str)
+            if message['type'] == 'ticker' and message.get('time'):
+                response = create_gdax_ws_response(response=message, pair="BTC-EUR")
+                await insert_function(response, **insert_kwargs)
+            else:
+                logger.warning(f"Message {message_str} was not a ticker or "
+                               f"did not have a time attribute")

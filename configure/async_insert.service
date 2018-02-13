@@ -1,0 +1,15 @@
+[Unit]
+Description=Insert into timescale database using asyncio
+
+[Service]
+Type=simple
+WorkingDirectory=/home/timescale/timescale
+EnvironmentFile=/home/timescale/.env
+PIDFile=/home/timescale/timescale/async_insert.pid
+ExecStart=/home/timescale/.conda/envs/timescale/bin/python /home/timescale/timescale/async_insert.py
+User=timescale
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
