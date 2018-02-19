@@ -11,6 +11,7 @@ from tzlocal import get_localzone
 KRAKEN_MAPPING = {'XBTEUR': 'XXBTZEUR'}
 GDAP_MAPPING = {'BTC': 'XBT'}
 BITSTAMP_MAPPING = {'BTC': 'XBT'}
+BITONIC_MAPPING = {'BTC': 'XBT'}
 TS = Union[str, int]
 
 
@@ -28,6 +29,9 @@ GDAX = namedtuple('GDAX', 'ts exchange base quote trade_id last_trade_price last
 GDAX_WS = namedtuple('GDAX_WS', 'ts exchange base quote trade_id last_trade_price '
                                 'last_trade_volume volume_24h low_24h high_24h '
                                 'ask_price bid_price')
+
+Bitonic_WS = namedtuple('Bitonic_WS', 'ts exchange base quote last_trade_price '
+                                      'last_trade_volume ask_price bid_price')
 
 def localize_kraken(local_zone: datetime.tzinfo=get_localzone()) -> datetime.datetime:
     return local_zone.localize(datetime.datetime.now())
@@ -108,3 +112,24 @@ def create_bitstamp_response(*, response: Dict, base: str, quote: str) -> Bitsta
                     volume_24h=Decimal(response.get('volume')),
                     low_24h=Decimal(response.get('low')),
                     opening=Decimal(response.get('open')))
+
+
+def create_bitonic_ws_response(*, response: Dict) -> Bitonic_WS:
+    """
+    See here https://github.com/BitonicNL/bl3p-api/blob/master/docs/public_api/websocket.md
+    :param response:
+    :return:
+    """
+    marketplace = response.get('marketplace')
+    base = BITONIC_MAPPING.get(marketplace[:3])
+    quote = marketplace[3:]
+    side = response.get('type')
+    last_trade_price = response.get('price_int') / 1e5
+    ask_price = last_trade_price if side == 'buy' else None
+    bid_price = last_trade_price if side != 'buy' else None
+    return Bitonic_WS(ts=localize_timestamp(response.get('date')),
+                      exchange='Bitonic', base=base, quote=quote,
+                      last_trade_price=last_trade_price,
+                      last_trade_volume=response.get('amount_int') / 1e8,
+                      ask_price=ask_price,
+                      bid_price=bid_price)

@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  db:
+    image: timescale/timescaledb
+    volumes:
+     - ./data/timescaledb:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    command: postgres
+  bitonic:
+    image: cryptrage:latest
+    command: python3 /code/async_insert.py bitonic
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+    env_file:
+      - timescale.env
+  gdax:
+    image: cryptrage:latest
+    command: python3 /code/async_insert.py gdax
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+    env_file:
+      - timescale.env
