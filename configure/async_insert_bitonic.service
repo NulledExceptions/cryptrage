@@ -5,10 +5,10 @@ Description=Insert into timescale database using asyncio
 Type=simple
 WorkingDirectory=/home/timescale/timescale
 EnvironmentFile=/home/timescale/.env
-PIDFile=/home/timescale/timescale/async_insert.pid
-ExecStart=/home/timescale/.conda/envs/timescale/bin/python /home/timescale/timescale/async_insert.py
+PIDFile=/home/timescale/timescale/insert_async_bitonic.pid
+ExecStart=/home/timescale/.conda/envs/timescale/bin/python /home/timescale/timescale/async_insert.py bitonic
 User=timescale
-Restart=on-failure
+Restart=always
 RestartSec=30
 
 [Install]

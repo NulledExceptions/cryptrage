@@ -71,7 +71,8 @@ def main(exchange) -> None:
 
         insert_ticker_async = lambda ticker: insert_ticker(ticker, pool=pool, table='ticker')
 
-        asyncio.get_event_loop().run_until_complete(run_tasks([get_async(insert_ticker_async)]))
+        asyncio.get_event_loop().run_until_complete(run_tasks([
+            get_async(insert_function=insert_ticker_async)]))
 
         try:
             asyncio.get_event_loop().run_until_complete(pool.close())
