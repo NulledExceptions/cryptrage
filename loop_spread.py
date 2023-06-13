@@ -121,11 +121,15 @@ def main() -> None:
     email_pw = os.environ.get("EMAILPW")
     if not email_pw:
         raise ValueError("EMAILPW was not a valid environment variable")
+    emails = os.environ.get("EMAILS")
+    if not emails:
+        raise ValueError("EMAILS was not a valid environment variable")
+    email_list = emails.split("|")
     email_kwargs = {"server_addr": 'smtp.gmail.com',
                     "user": 'pycryptrage@gmail.com',
                     "password": email_pw,
                     "port": 587,
-                    "to": ["giovanni@lanzani.nl", "rogier.de.jonge@gmail.com"]}
+                    "to": email_list}
     dsn = f"host=localhost password={pgpassword} dbname=timescale user=timescale"
     logger.info("Initializing connection pool")
     pool = ThreadedConnectionPool(minconn=1, maxconn=2, dsn=dsn)
