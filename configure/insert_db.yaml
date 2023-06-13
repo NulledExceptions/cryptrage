@@ -15,6 +15,7 @@ handlers:
         backupCount: 20
         encoding: utf8
 
+
     console:
         class: logging.StreamHandler
         level: DEBUG

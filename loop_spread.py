@@ -10,8 +10,8 @@ from typing import Dict, NamedTuple, Tuple, List
 from psycopg2.pool import ThreadedConnectionPool, AbstractConnectionPool
 from pid.decorator import pidfile
 
-from cryptrage.database.get_spreads import get_spreads
-from cryptrage.external_api import localize_timestamp
+from cryptrage.database.sync.get_spreads import get_spreads
+from cryptrage.tickers.external_api import localize_timestamp
 from cryptrage.logging import setup_logging
 
 config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'send_email.yaml')
@@ -107,6 +107,7 @@ def check_spreads(*, pool: AbstractConnectionPool, transaction_pct: float=0.25, 
                                                                open_for=open_for,
                                                                dont_email_newer_than=dont_email_newer_than,
                                                                **kwargs)
+        logger.info(f"Going to sleep for {sleep_for}")
         sleep(sleep_for)
 
 

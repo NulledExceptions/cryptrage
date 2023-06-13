@@ -1,5 +1,4 @@
 import asyncio
-import time
 import sys
 import os
 from os import path
@@ -7,9 +6,10 @@ from concurrent.futures import FIRST_EXCEPTION
 
 from pid import PidFile
 
-from cryptrage.external_api import get_gdax_async, get_bitonic_async
-from cryptrage.database.async import create_pool, insert_ticker
+from cryptrage.tickers.external_api import get_gdax_async, get_bitonic_async
+from cryptrage.database.async.insert import insert_ticker
 from cryptrage.logging import setup_logging
+from cryptrage.database.async.utils import get_pool
 
 config_path = path.join(path.dirname(path.abspath(__file__)), 'configure', 'insert_async.yaml')
 logger = setup_logging(config_path=config_path, name='insert_async')
@@ -28,23 +28,6 @@ async def run_tasks(futures):
         logger.exception("One coroutine failed, will restart now")
 
 
-def get_pool(dsn, loop):
-    counter = 0
-    attempts = 20
-    sleep_between_attempts = 3
-    while counter < attempts:
-        try:
-            pool = loop.run_until_complete(create_pool(dsn=dsn))
-        except Exception as e:  # database is not ready yet
-            logger.exception(e)
-            time.sleep(sleep_between_attempts)
-            counter += 1
-        else:
-            return pool
-    raise Exception(f"Could not connect to database using {dns} after "
-                    f"{attempts * sleep_between_attempts} seconds")
-
-
 def main(exchange) -> None:
     PGPASSWORD = os.environ.get("PGPASSWORD")
     PGHOST = os.environ.get("PGHOST", 'localhost')
@@ -61,7 +44,6 @@ def main(exchange) -> None:
         message = f'Unrecognized exchange f{exchange}'
         logger.error(message)
         raise ValueError(message)
-
 
     while True:
         try:
@@ -83,5 +65,10 @@ def main(exchange) -> None:
 if __name__ == '__main__':
     exchange = sys.argv[1]
     pid_file = f'insert_async_{exchange}'
+
+    for handler in logger.parent.handlers:
+        if handler.name == 'insert_async':
+            handler.baseFilename += f".{exchange}"
+
     with PidFile(pid_file, piddir='.'):
         main(exchange)

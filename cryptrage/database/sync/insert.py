@@ -5,7 +5,7 @@ from psycopg2 import sql
 from psycopg2.extensions import cursor as Cursor
 
 
-from cryptrage.database.utils import manage_pool, get_table_name
+from cryptrage.database.sync.utils import manage_pool, get_table_name
 
 
 @manage_pool

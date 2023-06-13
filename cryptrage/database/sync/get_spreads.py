@@ -5,7 +5,7 @@ from psycopg2 import sql
 from psycopg2.extensions import cursor as Cursor
 from psycopg2.extras import NamedTupleCursor
 
-from cryptrage.database.utils import manage_pool_key, get_table_name
+from cryptrage.database.sync.utils import manage_pool_key, get_table_name
 
 
 
@@ -17,31 +17,31 @@ def get_spreads(*, pool: AbstractConnectionPool=None, cursor: Cursor,
     table_name = sql.Identifier(get_table_name(schema=schema, table=table))
     transaction_ratio = sql.SQL(f"{transaction_pct / 100.}")
     statement = sql.SQL("""
-    WITH sq AS (
+    WITH latest_spreads AS (
     SELECT 
       LAST(ask_price, ts) ask, 
       LAST(bid_price, ts) bid, 
       LAST(ts, ts) ts,
       exchange
     FROM {0} 
-    WHERE ts > now() - INTERVAL '10 minutes'
+    WHERE ts > now() - INTERVAL '1 minute'
     GROUP BY exchange
     ),
     spreads AS (
     SELECT
-      (q1.bid - q2.ask) AS spread,
-      ROUND((q1.bid - q2.ask) / q2.ask * 100, 2) AS ask_pct,
-      q2.ask,
-      q1.exchange sell_to_exchange,
-      q2.exchange buy_from_exchange,
-      MD5(CONCAT(q1.exchange, q2.exchange)) exchanges_hash,
-      q1.ts sell_to_ts,
-      q2.ts buy_from_ts,
+      (sell_to.bid - buy_from.ask) AS spread,
+      ROUND((sell_to.bid - buy_from.ask) / buy_from.ask * 100, 2) AS ask_pct,
+      buy_from.ask,
+      sell_to.exchange sell_to_exchange,
+      buy_from.exchange buy_from_exchange,
+      MD5(CONCAT(sell_to.exchange, buy_from.exchange)) exchanges_hash,
+      sell_to.ts sell_to_ts,
+      buy_from.ts buy_from_ts,
       EXTRACT(HOUR FROM now() AT TIME ZONE 'Europe/Amsterdam') current_hour
-    FROM sq q1
-    CROSS JOIN sq q2
+    FROM latest_spreads sell_to
+    CROSS JOIN latest_spreads buy_from
     WHERE 
-      q1.bid - q2.ask > (q1.bid * {1} + q2.ask * {1}))
+      sell_to.bid - buy_from.ask > (sell_to.bid * {1} + buy_from.ask * {1}))
     SELECT * FROM spreads
     WHERE ((ask_pct > 1 AND current_hour BETWEEN 7 AND 23) OR ask_pct > 2)
       AND (buy_from_ts - sell_to_ts BETWEEN INTERVAL '-5 seconds' AND INTERVAL '5 seconds');

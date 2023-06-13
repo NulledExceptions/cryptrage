@@ -10,13 +10,12 @@ import gdax
 import bitstamp.client as bclient
 from requests.exceptions import RequestException
 import websockets
-from asyncpg.exceptions import InterfaceError
 
-from cryptrage.exchanges import (create_kraken_tuple, Bitstamp, create_gdax_response,
-                                 GDAX, Kraken, KRAKEN_MAPPING, localize_timestamp,
-                                 create_bitstamp_response,
-                                 create_gdax_ws_response,
-                                 create_bitonic_ws_response)
+from cryptrage.tickers.exchanges import (create_kraken_tuple, Bitstamp, create_gdax_response,
+                                         GDAX, Kraken, KRAKEN_MAPPING, localize_timestamp,
+                                         create_bitstamp_response,
+                                         create_gdax_ws_response,
+                                         create_bitonic_ws_response)
 
 
 logger = logging.getLogger(__name__)
@@ -87,6 +86,8 @@ async def get_gdax_async(*, insert_function):
     :param insert_kwargs: Kwargs for `insert_function`
     :return:
     """
+    # TODO if we want, subscribe could as easily become an argument
+    # TODO In that case, create_gdax_ws_response should be parametrized
     subscribe = json.dumps({
         "type": "subscribe",
         "product_ids": [
